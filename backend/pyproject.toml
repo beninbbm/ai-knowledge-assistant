@@ -9,8 +9,12 @@ dependencies = [
     "fastapi>=0.162.0",
     "fastapi-users[sqlalchemy]>=15",
     "httpx>=0.28.1",
+    "markdown-it-py>=4.2.0",
     "pgvector>=0.5.1",
     "pydantic-settings>=2.16.2",
+    "pymupdf>=2.1",
+    "python-docx>=1.2.0",
+    "python-multipart>=0.0.33",
     "sqlalchemy[asyncio]>=2.0,<2.1",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -31,6 +35,10 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 markers = ["integration: needs real Ollama running"]
+filterwarnings = [
+    # Harmless noise from PyMuPDF's compiled bindings on Python 3.12+.
+    "ignore:builtin type .* has no __module__ attribute:DeprecationWarning",
+]
 
 [dependency-groups]
 dev = [

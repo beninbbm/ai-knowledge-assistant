@@ -19,6 +19,7 @@ from sqlalchemy import (
     func,
     text,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -147,3 +148,22 @@ class DocumentPermission(TimestampMixin, Base):
     group_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("groups.id", ondelete="CASCADE"), index=True
     )
+
+
+class DocumentChunk(Base):
+    """A searchable piece of a document (see app/ingestion/chunker.py).
+    Embeddings are added to this table in Phase 3."""
+
+    __tablename__ = "chunks"
+    __table_args__ = (UniqueConstraint("document_id", "chunk_index", name="uq_chunks_doc_index"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)  # order in the document
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    heading_path: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    page_start: Mapped[int | None] = mapped_column(Integer)
+    page_end: Mapped[int | None] = mapped_column(Integer)
+    token_count: Mapped[int] = mapped_column(Integer, nullable=False)

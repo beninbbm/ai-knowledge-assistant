@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     # How long a login lasts before you must sign in again (8 hours).
     jwt_lifetime_seconds: int = 8 * 60 * 60
     upload_dir: Path = Path("data/uploads")
+    max_upload_bytes: int = 25 * 1024 * 1024  # 25 MB
+
+    # Chunking: target size and overlap between neighbouring chunks, in (estimated) tokens.
+    chunk_target_tokens: int = 500
+    chunk_overlap_tokens: int = 75
 
     @property
     def upload_path(self) -> Path:

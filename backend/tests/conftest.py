@@ -26,6 +26,7 @@ from app.db import Base, get_session
 from app.main import app
 from app.models import Document, User
 from app.schemas import UserCreate
+from app.storage import LocalFileStorage, get_storage
 
 PASSWORD = "correct-horse-battery-staple"
 
@@ -50,8 +51,14 @@ async def session_factory(engine: AsyncEngine) -> AsyncIterator[async_sessionmak
 
 
 @pytest.fixture
+def storage(tmp_path) -> LocalFileStorage:
+    """Uploaded files go to a temporary folder that is deleted after the test."""
+    return LocalFileStorage(tmp_path / "uploads")
+
+
+@pytest.fixture
 async def client(
-    session_factory: async_sessionmaker[AsyncSession],
+    session_factory: async_sessionmaker[AsyncSession], storage: LocalFileStorage
 ) -> AsyncIterator[httpx.AsyncClient]:
     """An HTTP client that talks to the app in-process, using the test database."""
 
@@ -60,6 +67,7 @@ async def client(
             yield session
 
     app.dependency_overrides[get_session] = test_session
+    app.dependency_overrides[get_storage] = lambda: storage
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c

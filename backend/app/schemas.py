@@ -39,6 +39,17 @@ class DocumentRead(ORMModel):
     is_owner: bool = False
 
 
+class ChunkRead(ORMModel):
+    id: uuid.UUID
+    document_id: uuid.UUID
+    chunk_index: int
+    text: str
+    heading_path: list[str]
+    page_start: int | None
+    page_end: int | None
+    token_count: int
+
+
 class DocumentShares(BaseModel):
     """Who a document is shared with (besides its owner). PUT replaces the whole list."""
 

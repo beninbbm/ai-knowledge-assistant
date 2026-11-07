@@ -25,6 +25,13 @@ uv run alembic upgrade head      # create/upgrade database tables
 uv run uvicorn app.main:app --reload
 ```
 
+In a second terminal, start the ingestion worker (it processes uploaded documents):
+
+```bash
+cd backend
+uv run python -m app.ingestion.worker
+```
+
 Check http://localhost:8000/health. Interactive API docs: http://localhost:8000/docs.
 
 ## Accounts
@@ -39,6 +46,23 @@ uv run python -m scripts.create_user you@example.com --admin   # prompts for a p
 
 In the API docs, click **Authorize** and log in with your email and password to try the
 protected endpoints.
+
+## Documents
+
+Upload `.pdf`, `.docx` or `.md` files (max 25 MB) with `POST /documents`. The upload
+returns immediately with status `pending`; the worker then extracts the text, splits it
+into chunks and marks it `ready` (or `failed` with an error). See a document's chunks
+with `GET /documents/{id}/chunks`.
+
+Sample files for a fictional company live in `samples/` (regenerate with
+`uv run python -m scripts.make_samples`). To see how any file gets chunked, without the
+database:
+
+```bash
+cd backend
+uv run python -m scripts.inspect_chunks ../samples/travel-expense-policy.pdf --sections
+uv run python -m scripts.inspect_chunks ../samples/travel-expense-policy.pdf --target 150 --overlap 30
+```
 
 ## Tests
 
