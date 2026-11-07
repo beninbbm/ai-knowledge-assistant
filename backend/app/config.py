@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     embed_model: str = "nomic-embed-text"
 
     jwt_secret: str = "change-me"
+    # How long a login lasts before you must sign in again (8 hours).
+    jwt_lifetime_seconds: int = 8 * 60 * 60
     upload_dir: Path = Path("data/uploads")
 
     @property

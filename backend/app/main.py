@@ -5,10 +5,25 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from app.api import documents, groups
+from app.auth.users import auth_backend, fastapi_users
 from app.config import settings
 from app.db import SessionDep
+from app.schemas import UserCreate, UserRead, UserUpdate
 
 app = FastAPI(title="AI Knowledge Assistant")
+
+# Accounts (from fastapi-users): register, log in/out, view/update your own profile.
+app.include_router(fastapi_users.get_auth_router(auth_backend), prefix="/auth/jwt", tags=["auth"])
+app.include_router(
+    fastapi_users.get_register_router(UserRead, UserCreate), prefix="/auth", tags=["auth"]
+)
+app.include_router(
+    fastapi_users.get_users_router(UserRead, UserUpdate), prefix="/users", tags=["users"]
+)
+
+app.include_router(documents.router)
+app.include_router(groups.router)
 
 
 @app.get("/health")

@@ -27,6 +27,19 @@ uv run uvicorn app.main:app --reload
 
 Check http://localhost:8000/health. Interactive API docs: http://localhost:8000/docs.
 
+## Accounts
+
+Anyone can sign up via `POST /auth/register`, but admins (who manage groups) can only be
+created from the command line:
+
+```bash
+cd backend
+uv run python -m scripts.create_user you@example.com --admin   # prompts for a password
+```
+
+In the API docs, click **Authorize** and log in with your email and password to try the
+protected endpoints.
+
 ## Tests
 
 ```bash

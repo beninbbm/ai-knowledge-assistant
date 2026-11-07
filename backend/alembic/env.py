@@ -25,6 +25,15 @@ if config.config_file_name is not None:
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
 
+
+def render_item(type_: str, obj, autogen_context):
+    """Write fastapi-users' GUID column type as the standard sa.Uuid() in migrations
+    (on Postgres both are a native UUID column), so generated files need no extra import."""
+    if type_ == "type" and type(obj).__name__ == "GUID":
+        return "sa.Uuid()"
+    return False
+
+
 # Database URL comes from app settings; override with: alembic -x db_url=... upgrade head
 config.set_main_option(
     "sqlalchemy.url",
@@ -62,7 +71,9 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection, target_metadata=target_metadata, render_item=render_item
+    )
 
     with context.begin_transaction():
         context.run_migrations()
