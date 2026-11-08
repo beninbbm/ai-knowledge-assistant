@@ -48,14 +48,19 @@ async def ask_stream(
     try:
         sources = await retrieve(session, embedder, user.id, body.question, k=body.k)
         async for event in generate(chat, body.question, sources):
-            match event:
-                case SourcesEvent(sources=found):
-                    data = [CitationRead.model_validate(c).model_dump(mode="json") for c in found]
-                    yield ServerSentEvent(event="sources", data=data)
-                case TokenEvent(text=text):
-                    yield ServerSentEvent(event="token", data={"text": text})
-                case DoneEvent(answer=answer):
-                    data = AnswerRead.model_validate(answer).model_dump(mode="json")
-                    yield ServerSentEvent(event="done", data=data)
+            yield to_sse(event)
     except (EmbeddingError, ChatError) as exc:
         yield ServerSentEvent(event="error", data={"message": str(exc)})
+
+
+def to_sse(event: SourcesEvent | TokenEvent | DoneEvent) -> ServerSentEvent:
+    """Encode an answering event as a Server-Sent Event."""
+    match event:
+        case SourcesEvent(sources=found):
+            data = [CitationRead.model_validate(c).model_dump(mode="json") for c in found]
+            return ServerSentEvent(event="sources", data=data)
+        case TokenEvent(text=text):
+            return ServerSentEvent(event="token", data={"text": text})
+        case DoneEvent(answer=answer):
+            data = AnswerRead.model_validate(answer).model_dump(mode="json")
+            return ServerSentEvent(event="done", data=data)

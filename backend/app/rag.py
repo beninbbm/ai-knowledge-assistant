@@ -81,10 +81,12 @@ async def retrieve(
     question: str,
     k: int = settings.search_top_k,
     history: list[dict[str, str]] | None = None,
+    search_query: str | None = None,
 ) -> list[NumberedSource]:
-    """Search (permission-filtered) and keep the results that fit in the prompt."""
-    results = await search(session, embedder, user_id, question, k=k)
-    return fit_sources(question, results, history)
+    """Search (permission-filtered) and keep the results that fit in the prompt.
+    `search_query` is the standalone version of a follow-up question, if any."""
+    results = await search(session, embedder, user_id, search_query or question, k=k)
+    return fit_sources(question, results, history, interpreted_as=search_query)
 
 
 async def generate(
@@ -92,8 +94,9 @@ async def generate(
     question: str,
     sources: list[NumberedSource],
     history: list[dict[str, str]] | None = None,
+    interpreted_as: str | None = None,
 ) -> AsyncIterator[SourcesEvent | TokenEvent | DoneEvent]:
-    """Stream an answer to `question` grounded in `sources`."""
+    """Stream an answer to `question` grounded in `sources`, continuing `history`."""
     yield SourcesEvent([_citation(s) for s in sources])
 
     if not sources:
@@ -104,7 +107,8 @@ async def generate(
 
     raw = ""
     usage: ChatUsage | None = None
-    async for chunk in chat.stream(build_messages(question, sources, history)):
+    messages = build_messages(question, sources, history, interpreted_as)
+    async for chunk in chat.stream(messages):
         if chunk.text:
             raw += chunk.text
             yield TokenEvent(chunk.text)

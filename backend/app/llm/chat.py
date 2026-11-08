@@ -41,7 +41,9 @@ class ChatChunk:
 class ChatModel(Protocol):
     model_name: str
 
-    def stream(self, messages: list[dict[str, str]]) -> AsyncIterator[ChatChunk]: ...
+    def stream(
+        self, messages: list[dict[str, str]], options: dict | None = None
+    ) -> AsyncIterator[ChatChunk]: ...
 
 
 class OllamaChat:
@@ -67,12 +69,16 @@ class OllamaChat:
         if seed is not None:
             self.options["seed"] = seed  # same seed + same prompt = same answer
 
-    async def stream(self, messages: list[dict[str, str]]) -> AsyncIterator[ChatChunk]:
+    async def stream(
+        self, messages: list[dict[str, str]], options: dict | None = None
+    ) -> AsyncIterator[ChatChunk]:
+        """Stream a reply. `options` overrides model settings for this call only,
+        e.g. {"temperature": 0}."""
         body = {
             "model": self.model_name,
             "messages": messages,
             "stream": True,
-            "options": self.options,
+            "options": {**self.options, **(options or {})},
             "keep_alive": "30m",  # keep the model in memory between questions
         }
         timeout = httpx.Timeout(settings.chat_timeout_seconds, connect=5.0)
@@ -112,6 +118,13 @@ class OllamaChat:
                 usage.prompt_tokens,
                 self.options["num_ctx"],
             )
+
+
+async def complete(
+    chat: ChatModel, messages: list[dict[str, str]], options: dict | None = None
+) -> str:
+    """Collect a whole reply (for short internal calls that don't need streaming)."""
+    return "".join([chunk.text async for chunk in chat.stream(messages, options)])
 
 
 def get_chat_model() -> ChatModel:

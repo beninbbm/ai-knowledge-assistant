@@ -5,6 +5,7 @@ your documents; we paste the most relevant passages into its prompt, numbered, a
 instruct it to answer only from them and to cite the numbers it used.
 """
 
+import re
 from dataclasses import dataclass
 
 from app.config import settings
@@ -57,9 +58,23 @@ def format_source(source: NumberedSource) -> str:
     return f"<source {' '.join(attrs)}>\n{_escape(r.text)}\n</source>"
 
 
-def user_message(question: str, sources: list[NumberedSource]) -> str:
+def user_message(
+    question: str, sources: list[NumberedSource], interpreted_as: str | None = None
+) -> str:
     blocks = "\n\n".join(format_source(s) for s in sources)
-    return f"Sources:\n\n{blocks}\n\nQuestion: {question}"
+    message = f"Sources:\n\n{blocks}\n\nQuestion: {question}"
+    if interpreted_as and interpreted_as.strip().lower() != question.strip().lower():
+        message += f"\n(In this conversation, this means: {interpreted_as})"
+    return message
+
+
+def history_messages(history: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Earlier turns for the prompt. Old answers lose their [n] markers: those numbers
+    referred to the sources of THAT turn, which aren't in this prompt."""
+    return [
+        {"role": m["role"], "content": re.sub(r"\s*\[\d+\]", "", m["content"]).strip()}
+        for m in history
+    ]
 
 
 def fit_sources(
@@ -68,10 +83,12 @@ def fit_sources(
     history: list[dict[str, str]] | None = None,
     num_ctx: int = settings.chat_num_ctx,
     answer_tokens: int = settings.chat_max_answer_tokens,
+    interpreted_as: str | None = None,
 ) -> list[NumberedSource]:
     """Number the search results and keep as many as fit in the context window, best
     first. Whatever doesn't fit is dropped rather than silently truncated by Ollama."""
-    fixed = estimate_tokens(SYSTEM_PROMPT) + estimate_tokens(user_message(question, []))
+    fixed = estimate_tokens(SYSTEM_PROMPT)
+    fixed += estimate_tokens(user_message(question, [], interpreted_as))
     fixed += sum(estimate_tokens(m["content"]) + 4 for m in history or [])
     budget = int(num_ctx * (1 - SAFETY_MARGIN)) - answer_tokens - fixed
 
@@ -90,10 +107,11 @@ def build_messages(
     question: str,
     sources: list[NumberedSource],
     history: list[dict[str, str]] | None = None,
+    interpreted_as: str | None = None,
 ) -> list[dict[str, str]]:
     """The full chat sent to the model: instructions, earlier turns, then sources+question."""
     return [
         {"role": "system", "content": SYSTEM_PROMPT},
-        *(history or []),
-        {"role": "user", "content": user_message(question, sources)},
+        *history_messages(history or []),
+        {"role": "user", "content": user_message(question, sources, interpreted_as)},
     ]

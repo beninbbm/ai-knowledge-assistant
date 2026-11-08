@@ -68,21 +68,35 @@ class FakeEmbedder:
 
 class FakeChat:
     """Replies with a scripted answer, streamed word by word, and records every prompt it
-    receives, so tests can check exactly what would have been sent to the LLM."""
+    receives, so tests can check exactly what would have been sent to the LLM.
+
+    Query-rewrite requests (follow-up questions) get `rewrite` as the reply, or the
+    question unchanged if `rewrite` is None."""
 
     model_name = "fake-chat"
 
     def __init__(self, reply: str = "Primary caregivers get 16 weeks [1].") -> None:
         self.reply = reply
-        self.prompts: list[list[dict[str, str]]] = []
+        self.rewrite: str | None = None
+        self.prompts: list[list[dict[str, str]]] = []  # answer prompts
+        self.rewrite_prompts: list[list[dict[str, str]]] = []  # query-rewrite prompts
         self.error: Exception | None = None
 
-    async def stream(self, messages):
-        from app.llm.chat import ChatChunk, ChatUsage
+    async def stream(self, messages, options=None):
+        import re
 
-        self.prompts.append(messages)
+        from app.llm.chat import ChatChunk, ChatUsage
+        from app.retrieval.condense import CONDENSE_SYSTEM_PROMPT
+
         if self.error:
             raise self.error
+        if messages[0]["content"] == CONDENSE_SYSTEM_PROMPT:
+            self.rewrite_prompts.append(messages)
+            question = re.search(r"Follow-up question: (.*)\n", messages[-1]["content"]).group(1)
+            yield ChatChunk(self.rewrite or question, ChatUsage(50, 10))
+            return
+
+        self.prompts.append(messages)
         words = self.reply.split(" ")
         for i, word in enumerate(words):
             yield ChatChunk(word if i == 0 else " " + word)

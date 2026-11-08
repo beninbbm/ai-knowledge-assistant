@@ -103,6 +103,51 @@ class ChunkContextRead(BaseModel):
     after: list[ChunkRead]
 
 
+class ConversationCreate(BaseModel):
+    title: str | None = Field(default=None, max_length=200)
+
+
+class ConversationUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
+class ConversationRead(ORMModel):
+    id: uuid.UUID
+    title: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class StoredCitationRead(BaseModel):
+    """A citation saved with an answer. If the user can no longer read the document
+    (unshared or deleted), `available` is false and the passage is withheld."""
+
+    number: int
+    available: bool
+    chunk_id: uuid.UUID | None = None  # None if the chunk was since replaced or deleted
+    document_id: uuid.UUID | None = None
+    document_title: str | None = None
+    heading_path: list[str] = []
+    page_start: int | None = None
+    page_end: int | None = None
+    text: str | None = None
+
+
+class MessageRead(ORMModel):
+    id: uuid.UUID
+    position: int
+    role: str
+    content: str
+    standalone_query: str | None
+    model: str | None
+    created_at: datetime
+    citations: list[StoredCitationRead] = []
+
+
+class ConversationDetail(ConversationRead):
+    messages: list[MessageRead]
+
+
 class DocumentShares(BaseModel):
     """Who a document is shared with (besides its owner). PUT replaces the whole list."""
 

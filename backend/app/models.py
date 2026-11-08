@@ -192,3 +192,89 @@ class DocumentChunk(Base):
     tsv: Mapped[str] = mapped_column(
         TSVECTOR, Computed("to_tsvector('english'::regconfig, text)", persisted=True)
     )
+
+
+# ---------------------------------------------------------------------------
+# Conversations
+# ---------------------------------------------------------------------------
+
+
+class Conversation(TimestampMixin, Base):
+    """A chat thread. Private to the user who started it."""
+
+    __tablename__ = "conversations"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    title: Mapped[str | None] = mapped_column(String(200))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class MessageRole(enum.StrEnum):
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
+class Message(TimestampMixin, Base):
+    __tablename__ = "messages"
+    __table_args__ = (
+        # Order within the conversation. (Timestamps can tie: Postgres's now() is the
+        # same for every row written in one transaction.)
+        UniqueConstraint("conversation_id", "position", name="uq_messages_conversation_position"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    role: Mapped[MessageRole] = mapped_column(
+        Enum(
+            MessageRole,
+            native_enum=False,
+            create_constraint=True,
+            length=20,
+            values_callable=lambda e: [m.value for m in e],
+            name="message_role",
+        ),
+        nullable=False,
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # User messages: the question rewritten to stand on its own, as used for search.
+    standalone_query: Mapped[str | None] = mapped_column(Text)
+    # Assistant messages: which model answered and how many tokens it read/wrote.
+    model: Mapped[str | None] = mapped_column(String(100))
+    prompt_tokens: Mapped[int | None] = mapped_column(Integer)
+    answer_tokens: Mapped[int | None] = mapped_column(Integer)
+
+
+class MessageCitation(Base):
+    """A source cited by an assistant message.
+
+    We keep a copy of the cited passage, because chunks are replaced when a document is
+    reprocessed and removed when it's deleted. The copy is only shown while the user can
+    still read the document (checked every time the conversation is viewed)."""
+
+    __tablename__ = "message_citations"
+    __table_args__ = (
+        UniqueConstraint("message_id", "number", name="uq_message_citations_message_number"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("messages.id", ondelete="CASCADE"), nullable=False
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    chunk_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("chunks.id", ondelete="SET NULL"))
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("documents.id", ondelete="SET NULL"), index=True
+    )
+    document_title: Mapped[str] = mapped_column(String(300), nullable=False)
+    heading_path: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default=list)
+    page_start: Mapped[int | None] = mapped_column(Integer)
+    page_end: Mapped[int | None] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
