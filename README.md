@@ -64,10 +64,25 @@ uv run python -m scripts.inspect_chunks ../samples/travel-expense-policy.pdf --s
 uv run python -m scripts.inspect_chunks ../samples/travel-expense-policy.pdf --target 150 --overlap 30
 ```
 
+## Search
+
+Each chunk is embedded with Ollama (`nomic-embed-text`) when it's processed. `GET /search?q=`
+runs hybrid search (meaning + keywords) over the documents you can read. From the
+terminal, showing how each result was found:
+
+```bash
+cd backend
+uv run python -m scripts.search "how long is parental leave?" --as you@example.com
+```
+
+Documents processed before embeddings existed, or with a different `EMBED_MODEL`, can be
+re-queued with `uv run python -m scripts.reindex` (add `--all` to redo everything).
+
 ## Tests
 
 ```bash
 cd backend
-uv run pytest            # all tests (needs Postgres; integration tests need Ollama)
+uv run pytest                        # all tests (needs Postgres and Ollama)
+uv run pytest -m "not integration"   # skip tests that call the real Ollama models
 uv run ruff check .      # lint
 ```

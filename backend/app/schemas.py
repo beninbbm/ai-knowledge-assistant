@@ -50,6 +50,21 @@ class ChunkRead(ORMModel):
     token_count: int
 
 
+class SearchResultRead(ORMModel):
+    chunk_id: uuid.UUID
+    document_id: uuid.UUID
+    document_title: str
+    chunk_index: int
+    text: str
+    heading_path: list[str]
+    page_start: int | None
+    page_end: int | None
+    score: float
+    similarity: float | None
+    vector_rank: int | None
+    keyword_rank: int | None
+
+
 class DocumentShares(BaseModel):
     """Who a document is shared with (besides its owner). PUT replaces the whole list."""
 

@@ -1,5 +1,4 @@
-"""Turn one uploaded document into stored chunks: extract -> chunk -> save.
-(Phase 3 adds an "embed" step between chunk and save.)"""
+"""Turn one uploaded document into searchable chunks: extract -> chunk -> embed -> save."""
 
 import asyncio
 import logging
@@ -12,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.config import settings
 from app.ingestion.chunker import TextChunk, chunk_sections
 from app.ingestion.extractors import ExtractedDocument, ExtractionError, extract
+from app.llm.embeddings import Embedder, EmbeddingError, text_for_embedding
 from app.models import Document, DocumentChunk, DocumentStatus
 from app.storage import FileStorage
 
@@ -64,21 +64,28 @@ def extract_and_chunk(path, mime_type: str) -> tuple[ExtractedDocument, list[Tex
 
 
 async def process_document(
-    session_factory: async_sessionmaker[AsyncSession], storage: FileStorage, document_id: uuid.UUID
+    session_factory: async_sessionmaker[AsyncSession],
+    storage: FileStorage,
+    embedder: Embedder,
+    document_id: uuid.UUID,
 ) -> DocumentStatus:
-    """Extract, chunk and store one claimed document. Records success or failure on it."""
+    """Extract, chunk, embed and store one claimed document. Records success or failure."""
     async with session_factory() as session:
         document = await session.get(Document, document_id)
         if document is None:  # deleted while queued
             return DocumentStatus.FAILED
         path, mime_type = storage.path(document.storage_path), document.mime_type
+        title = document.title
 
     try:
         # Parsing is ordinary blocking code; run it in a thread so the event loop stays free.
         extracted, chunks = await asyncio.to_thread(extract_and_chunk, path, mime_type)
         if not chunks:
             raise ExtractionError("No text could be extracted from this document.")
-    except ExtractionError as exc:
+        embeddings = await embedder.embed_documents(
+            [text_for_embedding(title, list(c.heading_path), c.text) for c in chunks]
+        )
+    except (ExtractionError, EmbeddingError) as exc:
         return await _mark_failed(session_factory, document_id, str(exc))
     except Exception as exc:
         log.exception("Unexpected error processing document %s", document_id)
@@ -99,8 +106,10 @@ async def process_document(
                 page_start=c.page_start,
                 page_end=c.page_end,
                 token_count=c.token_count,
+                embedding=vector,
+                embedding_model=embedder.model_name,
             )
-            for i, c in enumerate(chunks)
+            for i, (c, vector) in enumerate(zip(chunks, embeddings, strict=True))
         )
         document.page_count = extracted.page_count
         document.status = DocumentStatus.READY

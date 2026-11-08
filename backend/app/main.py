@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from app.api import documents, groups
+from app.api import documents, groups, search
 from app.auth.users import auth_backend, fastapi_users
 from app.config import settings
 from app.db import SessionDep
@@ -24,6 +24,7 @@ app.include_router(
 
 app.include_router(documents.router)
 app.include_router(groups.router)
+app.include_router(search.router)
 
 
 @app.get("/health")

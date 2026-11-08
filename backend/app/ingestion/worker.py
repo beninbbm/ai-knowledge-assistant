@@ -16,6 +16,7 @@ from datetime import timedelta
 
 from app.db import SessionLocal
 from app.ingestion.pipeline import claim_next_document, process_document, requeue_stale_documents
+from app.llm.embeddings import get_embedder
 from app.storage import get_storage
 
 log = logging.getLogger("worker")
@@ -26,6 +27,7 @@ STALE_AFTER = timedelta(minutes=10)
 
 async def run(once: bool = False) -> None:
     storage = get_storage()
+    embedder = get_embedder()
     async with SessionLocal() as session:
         requeued = await requeue_stale_documents(session, STALE_AFTER)
     if requeued:
@@ -41,7 +43,7 @@ async def run(once: bool = False) -> None:
             await asyncio.sleep(POLL_SECONDS)
             continue
         log.info("Processing document %s", document_id)
-        await process_document(SessionLocal, storage, document_id)
+        await process_document(SessionLocal, storage, embedder, document_id)
 
 
 def main() -> None:

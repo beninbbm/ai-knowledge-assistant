@@ -16,6 +16,18 @@ class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"
     chat_model: str = "llama3.1:8b"
     embed_model: str = "nomic-embed-text"
+    # Must match the embedding model's output size (nomic-embed-text: 768). Changing it
+    # needs a database migration, since the vector column has a fixed size.
+    embed_dimensions: int = 768
+    embed_batch_size: int = 32
+    # nomic-embed-text was trained with these task prefixes; other models may use none.
+    embed_document_prefix: str = "search_document: "
+    embed_query_prefix: str = "search_query: "
+
+    # Search: how many candidates each method (vector, keyword) proposes, and how many
+    # fused results are returned.
+    search_candidates: int = 20
+    search_top_k: int = 8
 
     jwt_secret: str = "change-me"
     # How long a login lasts before you must sign in again (8 hours).

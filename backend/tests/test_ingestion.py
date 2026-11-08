@@ -5,8 +5,9 @@ import asyncio
 import pytest
 
 from app.config import settings
-from app.ingestion.pipeline import claim_next_document, process_document
+from app.ingestion.pipeline import claim_next_document
 from scripts.make_samples import HANDBOOK, SECURITY, TRAVEL, to_markdown, write_docx, write_pdf
+from tests.helpers import run_worker, upload
 
 
 @pytest.fixture
@@ -31,26 +32,8 @@ def sample_files(tmp_path):
     return files
 
 
-async def upload(client, user, filename: str, data: bytes, **form):
-    return await client.post(
-        "/documents", files={"file": (filename, data)}, data=form, headers=user.headers
-    )
-
-
-async def run_worker(session_factory, storage) -> int:
-    """Process everything pending, like `python -m app.ingestion.worker --once`."""
-    processed = 0
-    while True:
-        async with session_factory() as session:
-            document_id = await claim_next_document(session)
-        if document_id is None:
-            return processed
-        await process_document(session_factory, storage, document_id)
-        processed += 1
-
-
 async def test_upload_all_formats_and_process(
-    client, alice, sample_files, session_factory, storage
+    client, alice, sample_files, session_factory, storage, embedder
 ):
     ids = {}
     for name, data in sample_files.items():
@@ -60,7 +43,7 @@ async def test_upload_all_formats_and_process(
         assert body["status"] == "pending"  # returned immediately, before processing
         ids[name] = body["id"]
 
-    assert await run_worker(session_factory, storage) == 3
+    assert await run_worker(session_factory, storage, embedder) == 3
 
     for name, doc_id in ids.items():
         doc = (await client.get(f"/documents/{doc_id}", headers=alice.headers)).json()
@@ -111,29 +94,31 @@ async def test_duplicate_upload_is_rejected(client, alice, bob):
     assert (await upload(client, bob, "a.md", b"# A\n\nSame content.")).status_code == 201
 
 
-async def test_failed_extraction_is_reported(client, alice, session_factory, storage):
+async def test_failed_extraction_is_reported(client, alice, session_factory, storage, embedder):
     resp = await upload(client, alice, "empty.md", b"# Just a heading\n")
-    await run_worker(session_factory, storage)
+    await run_worker(session_factory, storage, embedder)
     doc = (await client.get(f"/documents/{resp.json()['id']}", headers=alice.headers)).json()
     assert doc["status"] == "failed"
     assert "no text" in doc["error"]
 
 
-async def test_reprocess_requeues_document(client, alice, session_factory, storage):
+async def test_reprocess_requeues_document(client, alice, session_factory, storage, embedder):
     doc_id = (await upload(client, alice, "a.md", b"# A\n\nSome text.")).json()["id"]
-    await run_worker(session_factory, storage)
+    await run_worker(session_factory, storage, embedder)
     resp = await client.post(f"/documents/{doc_id}/reprocess", headers=alice.headers)
     assert resp.status_code == 202 and resp.json()["status"] == "pending"
-    await run_worker(session_factory, storage)
+    await run_worker(session_factory, storage, embedder)
     chunks = (await client.get(f"/documents/{doc_id}/chunks", headers=alice.headers)).json()
     assert len(chunks) == 1  # old chunks replaced, not duplicated
 
 
-async def test_others_cannot_reach_chunks_or_file(client, alice, bob, session_factory, storage):
+async def test_others_cannot_reach_chunks_or_file(
+    client, alice, bob, session_factory, storage, embedder
+):
     doc_id = (await upload(client, alice, "a.md", b"# Secret\n\nThe launch date is May 3.")).json()[
         "id"
     ]
-    await run_worker(session_factory, storage)
+    await run_worker(session_factory, storage, embedder)
     for path in (f"/documents/{doc_id}/chunks", f"/documents/{doc_id}/file"):
         assert (await client.get(path, headers=bob.headers)).status_code == 404
     assert (
@@ -153,9 +138,9 @@ async def test_others_cannot_reach_chunks_or_file(client, alice, bob, session_fa
     ).status_code == 403
 
 
-async def test_delete_removes_file_and_chunks(client, alice, session_factory, storage):
+async def test_delete_removes_file_and_chunks(client, alice, session_factory, storage, embedder):
     doc_id = (await upload(client, alice, "a.md", b"# A\n\nText.")).json()["id"]
-    await run_worker(session_factory, storage)
+    await run_worker(session_factory, storage, embedder)
     stored = list(storage.root.rglob("*.md"))
     assert len(stored) == 1
 

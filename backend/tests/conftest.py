@@ -23,17 +23,23 @@ import app.models  # noqa: F401  (register tables)
 from app.auth.users import UserManager
 from app.config import settings
 from app.db import Base, get_session
+from app.llm.embeddings import get_embedder
 from app.main import app
 from app.models import Document, User
 from app.schemas import UserCreate
 from app.storage import LocalFileStorage, get_storage
+from tests.fakes import FakeEmbedder
 
 PASSWORD = "correct-horse-battery-staple"
 
 
 @pytest.fixture(scope="session")
 async def engine() -> AsyncIterator[AsyncEngine]:
-    engine = create_async_engine(settings.test_database_url)
+    # lock_timeout: if a test forgets to close a session, the cleanup TRUNCATE fails after
+    # 10s with a clear error instead of waiting forever for that session's lock.
+    engine = create_async_engine(
+        settings.test_database_url, connect_args={"server_settings": {"lock_timeout": "10s"}}
+    )
     async with engine.begin() as conn:
         await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await conn.run_sync(Base.metadata.drop_all)
@@ -57,8 +63,15 @@ def storage(tmp_path) -> LocalFileStorage:
 
 
 @pytest.fixture
+def embedder() -> FakeEmbedder:
+    return FakeEmbedder()
+
+
+@pytest.fixture
 async def client(
-    session_factory: async_sessionmaker[AsyncSession], storage: LocalFileStorage
+    session_factory: async_sessionmaker[AsyncSession],
+    storage: LocalFileStorage,
+    embedder: FakeEmbedder,
 ) -> AsyncIterator[httpx.AsyncClient]:
     """An HTTP client that talks to the app in-process, using the test database."""
 
@@ -68,6 +81,7 @@ async def client(
 
     app.dependency_overrides[get_session] = test_session
     app.dependency_overrides[get_storage] = lambda: storage
+    app.dependency_overrides[get_embedder] = lambda: embedder
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
@@ -113,6 +127,7 @@ def make_document(
     """Insert a document row directly (uploading arrives in Phase 2)."""
 
     async def _make(owner: TestUser, title: str = "Handbook") -> uuid.UUID:
+        """Insert a document row directly, without a file or chunks."""
         async with session_factory() as session:
             document = Document(
                 owner_id=owner.id,

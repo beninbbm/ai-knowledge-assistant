@@ -5,9 +5,11 @@ import uuid
 from datetime import datetime
 
 from fastapi_users_db_sqlalchemy import SQLAlchemyBaseUserTableUUID
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Computed,
     DateTime,
     Enum,
     ForeignKey,
@@ -19,9 +21,10 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.config import settings
 from app.db import Base
 
 
@@ -151,11 +154,22 @@ class DocumentPermission(TimestampMixin, Base):
 
 
 class DocumentChunk(Base):
-    """A searchable piece of a document (see app/ingestion/chunker.py).
-    Embeddings are added to this table in Phase 3."""
+    """A searchable piece of a document (see app/ingestion/chunker.py)."""
 
     __tablename__ = "chunks"
-    __table_args__ = (UniqueConstraint("document_id", "chunk_index", name="uq_chunks_doc_index"),)
+    __table_args__ = (
+        UniqueConstraint("document_id", "chunk_index", name="uq_chunks_doc_index"),
+        Index("ix_chunks_document_id", "document_id"),
+        # HNSW: an index for fast "nearest vectors" search (approximate, but very close).
+        Index(
+            "ix_chunks_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+        # GIN: an index for fast keyword (full-text) search.
+        Index("ix_chunks_tsv", "tsv", postgresql_using="gin"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     document_id: Mapped[uuid.UUID] = mapped_column(
@@ -167,3 +181,14 @@ class DocumentChunk(Base):
     page_start: Mapped[int | None] = mapped_column(Integer)
     page_end: Mapped[int | None] = mapped_column(Integer)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    # Semantic search: the chunk's meaning as a vector, and which model produced it
+    # (vectors from different models can't be compared, so we track it).
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(settings.embed_dimensions))
+    embedding_model: Mapped[str | None] = mapped_column(String(100))
+
+    # Keyword search: Postgres computes and stores the searchable words ("lexemes") from
+    # the text automatically, e.g. "Parental leave policies" -> 'parent' 'leav' 'polici'.
+    tsv: Mapped[str] = mapped_column(
+        TSVECTOR, Computed("to_tsvector('english'::regconfig, text)", persisted=True)
+    )
