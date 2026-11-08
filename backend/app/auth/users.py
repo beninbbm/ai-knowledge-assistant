@@ -11,13 +11,15 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends
-from fastapi_users import BaseUserManager, FastAPIUsers, UUIDIDMixin
+from fastapi_users import BaseUserManager, FastAPIUsers, InvalidPasswordException, UUIDIDMixin
 from fastapi_users.authentication import AuthenticationBackend, BearerTransport, JWTStrategy
 from fastapi_users_db_sqlalchemy import SQLAlchemyUserDatabase
 
 from app.config import settings
 from app.db import SessionDep
 from app.models import User
+
+MIN_PASSWORD_LENGTH = 8
 
 
 async def get_user_db(session: SessionDep) -> AsyncIterator[SQLAlchemyUserDatabase]:
@@ -30,6 +32,15 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
     # Signing secrets for password-reset / email-verification tokens (not used yet).
     reset_password_token_secret = settings.jwt_secret
     verification_token_secret = settings.jwt_secret
+
+    async def validate_password(self, password: str, user) -> None:
+        """fastapi-users accepts any password by default; require a sensible minimum."""
+        if len(password) < MIN_PASSWORD_LENGTH:
+            raise InvalidPasswordException(
+                reason=f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+            )
+        if user.email and user.email.lower() in password.lower():
+            raise InvalidPasswordException(reason="Password must not contain your email address.")
 
 
 async def get_user_manager(

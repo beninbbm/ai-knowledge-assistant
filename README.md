@@ -34,6 +34,20 @@ uv run python -m app.ingestion.worker
 
 Check http://localhost:8000/health. Interactive API docs: http://localhost:8000/docs.
 
+## Web app
+
+With the API and worker running, start the frontend in a third terminal:
+
+```bash
+cd frontend
+npm install        # first time only
+npm run dev        # http://localhost:5173
+```
+
+Sign up, upload documents on the **Documents** page, then ask questions on **Chat**.
+Click a numbered citation to see the passage it came from. Admins also get a **Groups**
+page for sharing documents with teams.
+
 ## Accounts
 
 Anyone can sign up via `POST /auth/register`, but admins (who manage groups) can only be
@@ -114,3 +128,14 @@ uv run pytest                        # all tests (needs Postgres and Ollama)
 uv run pytest -m "not integration"   # skip tests that call the real Ollama models
 uv run ruff check .      # lint
 ```
+
+Frontend:
+
+```bash
+cd frontend
+npm test           # unit tests (Vitest)
+npm run lint       # oxlint
+npm run e2e        # browser tests (Playwright): needs the API, worker and Ollama running
+```
+
+The first `npm run e2e` needs a browser: `npx playwright install chromium`.

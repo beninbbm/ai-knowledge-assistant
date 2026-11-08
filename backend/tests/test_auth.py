@@ -49,3 +49,15 @@ async def test_passwords_are_stored_hashed(client, make_user, session_factory):
         stored = await session.scalar(select(User.hashed_password))
     assert PASSWORD not in stored
     assert stored.startswith("$argon2")
+
+
+async def test_weak_passwords_are_rejected(client):
+    short = await client.post(
+        "/auth/register", json={"email": "a@example.com", "password": "short"}
+    )
+    assert short.status_code == 400
+    assert "at least 8" in short.json()["detail"]["reason"]
+    has_email = await client.post(
+        "/auth/register", json={"email": "a@example.com", "password": "xxa@example.comxx"}
+    )
+    assert has_email.status_code == 400
