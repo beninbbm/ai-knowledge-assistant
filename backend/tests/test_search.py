@@ -7,7 +7,7 @@ from app.llm.embeddings import OllamaEmbedder, text_for_embedding
 from app.models import DocumentChunk
 from app.retrieval.fusion import reciprocal_rank_fusion
 from scripts.make_samples import HANDBOOK, SECURITY, TRAVEL, to_markdown, write_docx, write_pdf
-from tests.helpers import run_worker, upload
+from tests.helpers import run_worker, upload, upload_samples
 
 
 @pytest.fixture
@@ -23,18 +23,7 @@ async def bob(make_user):
 @pytest.fixture
 async def library(client, alice, tmp_path, session_factory, storage, embedder):
     """Alice uploads the three sample documents and the worker processes them."""
-    write_docx(SECURITY, tmp_path / "it-security-policy.docx")
-    write_pdf(TRAVEL, tmp_path / "travel-expense-policy.pdf")
-    files = {
-        "employee-handbook.md": to_markdown(HANDBOOK).encode(),
-        "it-security-policy.docx": (tmp_path / "it-security-policy.docx").read_bytes(),
-        "travel-expense-policy.pdf": (tmp_path / "travel-expense-policy.pdf").read_bytes(),
-    }
-    ids = {}
-    for name, data in files.items():
-        ids[name] = (await upload(client, alice, name, data)).json()["id"]
-    await run_worker(session_factory, storage, embedder)
-    return ids
+    return await upload_samples(client, alice, tmp_path, session_factory, storage, embedder)
 
 
 async def search(client, user, q: str, k: int = 5) -> list[dict]:

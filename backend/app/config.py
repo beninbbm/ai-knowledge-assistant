@@ -15,6 +15,13 @@ class Settings(BaseSettings):
 
     ollama_url: str = "http://localhost:11434"
     chat_model: str = "llama3.1:8b"
+    # Context window in tokens: everything the model reads (instructions, sources,
+    # question) plus what it writes must fit. Ollama defaults to a small window and
+    # SILENTLY cuts off the start of longer prompts, so we always set it explicitly.
+    chat_num_ctx: int = 8192
+    chat_max_answer_tokens: int = 1024
+    chat_temperature: float = 0.1  # low = focused and consistent; high = more creative
+    chat_timeout_seconds: float = 300.0
     embed_model: str = "nomic-embed-text"
     # Must match the embedding model's output size (nomic-embed-text: 768). Changing it
     # needs a database migration, since the vector column has a fixed size.

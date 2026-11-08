@@ -64,3 +64,30 @@ class FakeEmbedder:
     async def embed_query(self, text: str) -> list[float]:
         self.calls += 1
         return self._vector(text)
+
+
+class FakeChat:
+    """Replies with a scripted answer, streamed word by word, and records every prompt it
+    receives, so tests can check exactly what would have been sent to the LLM."""
+
+    model_name = "fake-chat"
+
+    def __init__(self, reply: str = "Primary caregivers get 16 weeks [1].") -> None:
+        self.reply = reply
+        self.prompts: list[list[dict[str, str]]] = []
+        self.error: Exception | None = None
+
+    async def stream(self, messages):
+        from app.llm.chat import ChatChunk, ChatUsage
+
+        self.prompts.append(messages)
+        if self.error:
+            raise self.error
+        words = self.reply.split(" ")
+        for i, word in enumerate(words):
+            yield ChatChunk(word if i == 0 else " " + word)
+        yield ChatChunk("", ChatUsage(prompt_tokens=100, answer_tokens=len(words)))
+
+    @property
+    def last_prompt_text(self) -> str:
+        return "\n".join(m["content"] for m in self.prompts[-1])

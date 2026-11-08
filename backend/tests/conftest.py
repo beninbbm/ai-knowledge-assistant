@@ -23,12 +23,13 @@ import app.models  # noqa: F401  (register tables)
 from app.auth.users import UserManager
 from app.config import settings
 from app.db import Base, get_session
+from app.llm.chat import get_chat_model
 from app.llm.embeddings import get_embedder
 from app.main import app
 from app.models import Document, User
 from app.schemas import UserCreate
 from app.storage import LocalFileStorage, get_storage
-from tests.fakes import FakeEmbedder
+from tests.fakes import FakeChat, FakeEmbedder
 
 PASSWORD = "correct-horse-battery-staple"
 
@@ -68,10 +69,16 @@ def embedder() -> FakeEmbedder:
 
 
 @pytest.fixture
+def chat() -> FakeChat:
+    return FakeChat()
+
+
+@pytest.fixture
 async def client(
     session_factory: async_sessionmaker[AsyncSession],
     storage: LocalFileStorage,
     embedder: FakeEmbedder,
+    chat: FakeChat,
 ) -> AsyncIterator[httpx.AsyncClient]:
     """An HTTP client that talks to the app in-process, using the test database."""
 
@@ -82,6 +89,7 @@ async def client(
     app.dependency_overrides[get_session] = test_session
     app.dependency_overrides[get_storage] = lambda: storage
     app.dependency_overrides[get_embedder] = lambda: embedder
+    app.dependency_overrides[get_chat_model] = lambda: chat
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c

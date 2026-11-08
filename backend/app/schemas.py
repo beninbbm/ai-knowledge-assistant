@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 
 from fastapi_users import schemas
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models import DocumentStatus
 
@@ -63,6 +63,44 @@ class SearchResultRead(ORMModel):
     similarity: float | None
     vector_rank: int | None
     keyword_rank: int | None
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=2000)
+    k: int = Field(default=8, ge=1, le=20, description="How many passages to retrieve")
+
+
+class CitationRead(ORMModel):
+    number: int
+    chunk_id: uuid.UUID
+    document_id: uuid.UUID
+    document_title: str
+    heading_path: list[str]
+    page_start: int | None
+    page_end: int | None
+    text: str
+
+
+class UsageRead(ORMModel):
+    prompt_tokens: int
+    answer_tokens: int
+
+
+class AnswerRead(ORMModel):
+    answer: str
+    citations: list[CitationRead]
+    sources_considered: int
+    model: str | None
+    usage: UsageRead | None
+
+
+class ChunkContextRead(BaseModel):
+    """A cited passage plus its neighbours, for reading it in context."""
+
+    document: DocumentRead
+    chunk: ChunkRead
+    before: list[ChunkRead]
+    after: list[ChunkRead]
 
 
 class DocumentShares(BaseModel):
