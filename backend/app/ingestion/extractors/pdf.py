@@ -18,7 +18,13 @@ from pathlib import Path
 
 import pymupdf
 
-from app.ingestion.extractors.base import ExtractedDocument, ExtractionError, Section
+from app.config import settings
+from app.ingestion.extractors.base import (
+    ExtractedDocument,
+    ExtractionError,
+    Section,
+    format_table,
+)
 
 # Fewer characters than this per page on average means there's no real text layer.
 MIN_CHARS_PER_PAGE = 20
@@ -83,12 +89,7 @@ def _reliable_table(rows: list[list[str | None]]) -> bool:
 
 
 def _table_text(rows: list[list[str | None]]) -> str:
-    lines = []
-    for row in rows:
-        cells = [" ".join(_normalise(c or "").split()) for c in row]
-        if any(cells):
-            lines.append(" | ".join(cells))
-    return "\n".join(lines)
+    return format_table([[_normalise(cell) if cell else None for cell in row] for row in rows])
 
 
 def _continues(previous: Section, text: str, page_no: int) -> bool:
@@ -110,6 +111,10 @@ def extract_pdf(path: Path) -> ExtractedDocument:
     with doc:
         if doc.needs_pass:
             raise ExtractionError("This PDF is password-protected.")
+        if doc.page_count > settings.max_pdf_pages:
+            raise ExtractionError(
+                f"This PDF has {doc.page_count} pages; the limit is {settings.max_pdf_pages}."
+            )
 
         # Bookmark titles -> heading level (first occurrence wins).
         bookmarks: dict[str, int] = {}

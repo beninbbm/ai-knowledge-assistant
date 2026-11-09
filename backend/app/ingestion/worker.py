@@ -17,6 +17,7 @@ from datetime import timedelta
 from app.db import SessionLocal
 from app.ingestion.pipeline import claim_next_document, process_document, requeue_stale_documents
 from app.llm.embeddings import get_embedder
+from app.observability import configure_logging
 from app.storage import get_storage
 
 log = logging.getLogger("worker")
@@ -50,9 +51,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Process uploaded documents.")
     parser.add_argument("--once", action="store_true", help="exit when the queue is empty")
     args = parser.parse_args()
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
-    )
+    configure_logging()
     try:
         asyncio.run(run(once=args.once))
     except KeyboardInterrupt:

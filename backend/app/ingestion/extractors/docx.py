@@ -13,7 +13,12 @@ import docx
 from docx.table import Table
 from docx.text.paragraph import Paragraph
 
-from app.ingestion.extractors.base import ExtractedDocument, ExtractionError, Section
+from app.ingestion.extractors.base import (
+    ExtractedDocument,
+    ExtractionError,
+    Section,
+    format_table,
+)
 
 
 def _heading_level(paragraph: Paragraph) -> int | None:
@@ -25,16 +30,7 @@ def _heading_level(paragraph: Paragraph) -> int | None:
 
 
 def _table_text(table: Table) -> str:
-    rows = []
-    for row in table.rows:
-        cells: list[str] = []
-        for cell in row.cells:
-            text = " ".join(cell.text.split())
-            if not cells or cells[-1] != text:  # merged cells repeat; keep one copy
-                cells.append(text)
-        if any(cells):
-            rows.append(" | ".join(cells))
-    return "\n".join(rows)
+    return format_table([[cell.text for cell in row.cells] for row in table.rows])
 
 
 def extract_docx(path: Path) -> ExtractedDocument:

@@ -10,10 +10,28 @@ from pathlib import Path
 
 from markdown_it import MarkdownIt
 
-from app.ingestion.extractors.base import ExtractedDocument, ExtractionError, Section
+from app.ingestion.extractors.base import (
+    ExtractedDocument,
+    ExtractionError,
+    Section,
+    format_table,
+)
 
 _parser = MarkdownIt("commonmark").enable("table")
 _FRONT_MATTER = re.compile(r"\A---\n.*?\n---\n", re.DOTALL)
+
+
+def _table_rows(tokens: list, start: int) -> list[list[str]]:
+    """Cell texts of the table whose table_open token is at `start`."""
+    rows: list[list[str]] = []
+    for token in tokens[start + 1 :]:
+        if token.type == "table_close":
+            break
+        if token.type == "tr_open":
+            rows.append([])
+        elif token.type == "inline" and rows:
+            rows[-1].append(token.content.strip())
+    return rows
 
 
 def extract_markdown(path: Path) -> ExtractedDocument:
@@ -40,6 +58,11 @@ def extract_markdown(path: Path) -> ExtractedDocument:
             headings = headings[: level - 1] + [title]
             continue
         if token.type == "hr":
+            continue
+        if token.type == "table_open":
+            text = format_table(_table_rows(tokens, i))
+            if text:
+                sections.append(Section(text, tuple(headings)))
             continue
         start, end = token.map
         text = "\n".join(lines[start:end]).strip()

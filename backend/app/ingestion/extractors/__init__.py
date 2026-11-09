@@ -50,6 +50,13 @@ def detect_file_type(filename: str, data: bytes) -> FileType | None:
     return None
 
 
+def uncompressed_size(data: bytes) -> int:
+    """Total size of a zip's (e.g. a .docx's) contents once unpacked, read from its index
+    without actually unpacking anything."""
+    with zipfile.ZipFile(io.BytesIO(data)) as zf:
+        return sum(info.file_size for info in zf.infolist())
+
+
 def extract(path: Path, mime_type: str) -> ExtractedDocument:
     match FileType(mime_type):
         case FileType.PDF:

@@ -31,10 +31,24 @@ class Settings(BaseSettings):
     embed_document_prefix: str = "search_document: "
     embed_query_prefix: str = "search_query: "
 
+    # Limits (per user). Questions cover /ask, /ask/stream and conversation messages.
+    rate_limit_questions_per_minute: int = 10
+    rate_limit_uploads_per_hour: int = 60
+    max_pdf_pages: int = 1000
+    # A .docx is a zip file; refuse ones that would expand to more than this when opened
+    # (a "zip bomb" can be tiny on disk but huge in memory).
+    max_docx_uncompressed_bytes: int = 200 * 1024 * 1024
+
+    # Logging. Question text is only logged when explicitly enabled (it may be sensitive).
+    log_level: str = "INFO"
+    log_question_text: bool = False
+
     # Search: how many candidates each method (vector, keyword) proposes, and how many
     # fused results are returned.
     search_candidates: int = 20
-    search_top_k: int = 8
+    # 5 chosen by evaluation (scripts/evaluate.py): same accuracy as 8 on the golden
+    # questions, ~35% faster to the first word, with headroom over 3.
+    search_top_k: int = 5
 
     jwt_secret: str = "change-me"
     # How long a login lasts before you must sign in again (8 hours).

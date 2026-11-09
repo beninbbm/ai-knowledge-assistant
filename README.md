@@ -120,6 +120,29 @@ the original question with the last 3 turns as context. `GET /conversations/{id}
 the history with citations; a cited passage is only shown while you can still read its
 document.
 
+## Evaluating quality
+
+`backend/eval/questions.yaml` holds 35 questions about the sample documents with their
+expected answers and sources (direct look-ups, tables, paraphrases, follow-ups, and
+questions the documents can't answer). The evaluation runs them through the real
+pipeline and models and scores retrieval and answers:
+
+```bash
+cd backend
+uv run python -m scripts.evaluate --retrieval-only   # fast: search quality only
+uv run python -m scripts.evaluate                    # full: answers with the default k
+uv run python -m scripts.evaluate --k 3 5 8          # compare passage counts
+```
+
+Run it after changing models, prompts, chunking or search settings to see whether things
+got better or worse. Each run saves a full report (every answer) to `backend/eval/results/`.
+
+## Limits and logging
+
+Per user: 10 questions per minute and 60 uploads per hour (`RATE_LIMIT_*` settings), 25 MB
+per file, 1,000 pages per PDF. Each answer is logged as one line with its timings, token
+counts and number of citations; question text is only logged when `LOG_QUESTION_TEXT=true`.
+
 ## Tests
 
 ```bash

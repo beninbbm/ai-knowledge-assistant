@@ -1,0 +1,248 @@
+# Golden questions for evaluating the assistant against the documents in samples/.
+#
+# Each case:
+#   question:  what the user asks
+#   category:  direct | table | paraphrase | multi-document | follow-up | unanswerable
+#   document:  the sample file the answer should come from
+#   headings:  the section(s) holding the answer (last heading of the chunk); any one counts
+#   facts:     regular expressions (case-insensitive) that must ALL appear in the answer;
+#              use a|b for acceptable alternatives
+#   history:   for follow-ups, the earlier questions in the conversation
+#
+# Unanswerable cases have no document: the right response is to say it isn't there.
+
+- id: hb-core-hours
+  category: direct
+  question: What are the core collaboration hours?
+  document: employee-handbook.md
+  headings: [Working Hours]
+  facts: ["10:00", "15:00"]
+
+- id: hb-annual-leave
+  category: direct
+  question: How many days of annual leave do full-time employees get?
+  document: employee-handbook.md
+  headings: [Annual Leave]
+  facts: ["25"]
+
+- id: hb-carry-over
+  category: direct
+  question: How many unused leave days can I carry over, and when do they expire?
+  document: employee-handbook.md
+  headings: [Annual Leave]
+  facts: ["\\b5\\b|five", "31 march|march 31"]
+
+- id: hb-secondary-caregiver
+  category: direct
+  question: How much parental leave does a secondary caregiver get?
+  document: employee-handbook.md
+  headings: [Parental Leave]
+  facts: ["6 weeks|six weeks"]
+
+- id: hb-sick-note
+  category: direct
+  question: When do I need a doctor's note for sick leave?
+  document: employee-handbook.md
+  headings: [Sick Leave]
+  facts: ["\\b3\\b|three"]
+
+- id: hb-remote-days
+  category: direct
+  question: How long can I work from another country without approval?
+  document: employee-handbook.md
+  headings: [Remote Work]
+  facts: ["60 days"]
+
+- id: hb-home-office
+  category: direct
+  question: What home office budget do new starters get?
+  document: employee-handbook.md
+  headings: [Remote Work]
+  facts: ["1,?200"]
+
+- id: sec-admin-password
+  category: table
+  question: What is the minimum password length for admin accounts?
+  document: it-security-policy.docx
+  headings: [Passwords and Authentication]
+  facts: ["\\b20\\b"]
+
+- id: sec-rotation
+  category: table
+  question: How often do standard account passwords have to be changed?
+  document: it-security-policy.docx
+  headings: [Passwords and Authentication]
+  facts: ["compromise"]
+
+- id: sec-screen-lock
+  category: direct
+  question: After how long should my laptop screen lock?
+  document: it-security-policy.docx
+  headings: [Devices]
+  facts: ["5 minutes|five minutes"]
+
+- id: sec-report-time
+  category: direct
+  question: How quickly must a security incident be reported?
+  document: it-security-policy.docx
+  headings: [Reporting Security Incidents]
+  facts: ["1 hour|one hour"]
+
+- id: sec-credentials
+  category: direct
+  question: Where must credentials and keys be stored?
+  document: it-security-policy.docx
+  headings: [Data Classification]
+  facts: ["vault"]
+
+- id: tr-book-advance
+  category: direct
+  question: How far in advance should business travel be booked?
+  document: travel-expense-policy.pdf
+  headings: [Booking Travel]
+  facts: ["14 days"]
+
+- id: tr-business-class
+  category: direct
+  question: Who has to approve business class flights?
+  document: travel-expense-policy.pdf
+  headings: [Booking Travel]
+  facts: ["vice president|\\bvp\\b"]
+
+- id: tr-hotel-new-york
+  category: table
+  question: What is the hotel cap per night in New York?
+  document: travel-expense-policy.pdf
+  headings: [Hotels and Daily Allowances]
+  facts: ["250"]
+
+- id: tr-allowance-other
+  category: table
+  question: What is the daily allowance in cities that aren't major cities?
+  document: travel-expense-policy.pdf
+  headings: [Hotels and Daily Allowances]
+  facts: ["\\$?70\\b"]
+
+- id: tr-claim-deadline
+  category: direct
+  question: What is the deadline for submitting an expense claim?
+  document: travel-expense-policy.pdf
+  headings: [Reimbursement Process]
+  facts: ["30 days"]
+
+- id: tr-mileage
+  category: direct
+  question: What mileage rate is paid for using my own car?
+  document: travel-expense-policy.pdf
+  headings: [Reimbursement Process]
+  facts: ["0\\.60|60 cents"]
+
+- id: lb-drafted
+  category: direct
+  question: Which team drafted LeBron James?
+  document: lebron-james.md
+  headings: [Cleveland Cavaliers (2003-2010)]
+  facts: ["cavaliers|cleveland"]
+
+- id: lb-championships
+  category: table
+  question: How many NBA championships has LeBron James won?
+  document: lebron-james.md
+  headings: [Career Highlights, Los Angeles Lakers (2018-present)]
+  facts: ["\\b4\\b|four"]
+
+- id: lb-beats
+  category: table
+  question: How much did LeBron reportedly make when Apple bought Beats?
+  document: lebron-james.md
+  headings: [Business Investments]
+  facts: ["30 million"]
+
+- id: lb-nike
+  category: direct
+  question: How much is LeBron's lifetime Nike deal reportedly worth?
+  document: lebron-james.md
+  headings: [Endorsements]
+  facts: ["billion"]
+
+- id: lb-school
+  category: direct
+  question: What school did LeBron open in Akron?
+  document: lebron-james.md
+  headings: [Off the Court, Philanthropy]
+  facts: ["i promise"]
+
+- id: hb-parental-paraphrase
+  category: paraphrase
+  question: How long can new mums and dads take off after a baby arrives?
+  document: employee-handbook.md
+  headings: [Parental Leave]
+  facts: ["16 weeks|sixteen weeks"]
+
+- id: sec-phishing-paraphrase
+  category: paraphrase
+  question: I clicked a dodgy link in an email. What should I do?
+  document: it-security-policy.docx
+  headings: [Reporting Security Incidents]
+  facts: ["security@northwind\\.example"]
+
+- id: tr-parking-paraphrase
+  category: paraphrase
+  question: Can I claim back a parking ticket?
+  document: travel-expense-policy.pdf
+  headings: [Non-Reimbursable Items]
+  facts: ["non-reimbursable|not reimbursable|not be reimbursed|cannot|can't|\\bno\\b|not covered"]
+
+- id: lb-record-team-paraphrase
+  category: paraphrase
+  question: Which team was LeBron on when he became the top scorer in league history?
+  document: lebron-james.md
+  headings: [Los Angeles Lakers (2018-present), Career Highlights]
+  facts: ["lakers"]
+
+- id: multi-lost-laptop-trip
+  category: multi-document
+  question: If I lose my work laptop on a business trip, who do I tell and how quickly?
+  document: it-security-policy.docx
+  headings: [Reporting Security Incidents]
+  facts: ["security@northwind\\.example", "1 hour|one hour"]
+
+- id: fu-contractors
+  category: follow-up
+  history: ["How much parental leave do primary caregivers get?"]
+  question: what about contractors?
+  document: employee-handbook.md
+  headings: [Parental Leave]
+  facts: ["not eligible|unpaid|not entitled"]
+
+- id: fu-london-allowance
+  category: follow-up
+  history: ["What is the hotel cap per night in London?"]
+  question: and the daily allowance there?
+  document: travel-expense-policy.pdf
+  headings: [Hotels and Daily Allowances]
+  facts: ["\\$?90\\b"]
+
+- id: fu-lebron-miami
+  category: follow-up
+  history: ["Which team drafted LeBron James?"]
+  question: when did he leave them for Miami?
+  document: lebron-james.md
+  headings: [Miami Heat (2010-2014), Cleveland Cavaliers (2003-2010)]
+  facts: ["2010"]
+
+- id: un-dress-code
+  category: unanswerable
+  question: What is the company dress code?
+
+- id: un-stock-options
+  category: unanswerable
+  question: How many stock options do new employees receive?
+
+- id: un-lebron-food
+  category: unanswerable
+  question: What is LeBron James's favourite food?
+
+- id: un-wifi
+  category: unanswerable
+  question: What is the password for the office Wi-Fi?

@@ -1,7 +1,12 @@
 """FastAPI application entry point. Run with: uv run uvicorn app.main:app --reload"""
 
+import logging
+import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
@@ -9,9 +14,40 @@ from app.api import ask, chunks, conversations, documents, groups, search
 from app.auth.users import auth_backend, fastapi_users
 from app.config import settings
 from app.db import SessionDep
+from app.observability import configure_logging
 from app.schemas import UserCreate, UserRead, UserUpdate
 
-app = FastAPI(title="AI Knowledge Assistant")
+log = logging.getLogger("app")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    configure_logging()
+    if settings.jwt_secret in ("", "change-me"):
+        log.warning(
+            "JWT_SECRET is not set: login tokens use a default, guessable key. Set it in .env."
+        )
+    yield
+
+
+app = FastAPI(title="AI Knowledge Assistant", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """One line per request: method, path, status and how long it took."""
+    started = time.perf_counter()
+    response = await call_next(request)
+    if request.url.path != "/health":
+        log.info(
+            "%s %s -> %d (%d ms)",
+            request.method,
+            request.url.path,
+            response.status_code,
+            (time.perf_counter() - started) * 1000,
+        )
+    return response
+
 
 # Accounts (from fastapi-users): register, log in/out, view/update your own profile.
 app.include_router(fastapi_users.get_auth_router(auth_backend), prefix="/auth/jwt", tags=["auth"])

@@ -11,6 +11,7 @@ import time
 
 from sqlalchemy import select
 
+from app.config import settings
 from app.db import SessionLocal
 from app.llm.chat import OllamaChat
 from app.llm.embeddings import OllamaEmbedder
@@ -60,7 +61,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Ask a question about your documents.")
     parser.add_argument("question")
     parser.add_argument("--as", dest="email", required=True, help="ask as this user")
-    parser.add_argument("-k", type=int, default=8, help="passages to retrieve")
+    parser.add_argument("-k", type=int, default=settings.search_top_k, help="passages to retrieve")
     parser.add_argument("--show-prompt", action="store_true", help="print the full prompt")
     args = parser.parse_args()
     asyncio.run(run(args.question, args.email, args.k, args.show_prompt))

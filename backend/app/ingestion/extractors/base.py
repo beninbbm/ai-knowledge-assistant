@@ -30,3 +30,26 @@ class ExtractedDocument:
 
 class ExtractionError(Exception):
     """A problem with the file itself (shown to the user), e.g. a scanned PDF with no text."""
+
+
+def format_table(rows: list[list[str | None]]) -> str:
+    """Write a table so each value carries its column name:
+
+        City: London; Hotel cap: $250; Daily allowance: $90
+
+    A plain grid ("London | $250 | $90") only names the columns in its first row, and
+    small LLMs often pick the wrong column when they read it. Repeating the header with
+    each value removes the guesswork (the evaluation showed this happening)."""
+    cleaned = [[" ".join((cell or "").split()) for cell in row] for row in rows]
+    cleaned = [row for row in cleaned if any(row)]
+    if not cleaned:
+        return ""
+    header, *body = cleaned
+    usable_header = body and all(header) and len(set(header)) == len(header)
+    if not usable_header:
+        return "\n".join(" | ".join(row) for row in cleaned)
+    lines = []
+    for row in body:
+        pairs = [f"{name}: {value}" for name, value in zip(header, row, strict=False) if value]
+        lines.append("; ".join(pairs))
+    return "\n".join(lines)

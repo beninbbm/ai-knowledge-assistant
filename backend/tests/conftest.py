@@ -57,6 +57,15 @@ async def session_factory(engine: AsyncEngine) -> AsyncIterator[async_sessionmak
         await conn.execute(text(f"TRUNCATE {tables} CASCADE"))
 
 
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    """Every test starts with a fresh allowance."""
+    from app.ratelimit import ALL_LIMITERS
+
+    for limiter in ALL_LIMITERS:
+        limiter.reset()
+
+
 @pytest.fixture
 def storage(tmp_path) -> LocalFileStorage:
     """Uploaded files go to a temporary folder that is deleted after the test."""

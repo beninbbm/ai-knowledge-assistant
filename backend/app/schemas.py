@@ -6,6 +6,7 @@ from datetime import datetime
 from fastapi_users import schemas
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.config import settings
 from app.models import DocumentStatus
 
 
@@ -67,7 +68,9 @@ class SearchResultRead(ORMModel):
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
-    k: int = Field(default=8, ge=1, le=20, description="How many passages to retrieve")
+    k: int = Field(
+        default=settings.search_top_k, ge=1, le=20, description="How many passages to retrieve"
+    )
 
 
 class CitationRead(ORMModel):

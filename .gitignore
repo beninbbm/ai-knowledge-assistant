@@ -17,3 +17,6 @@ data/
 .DS_Store
 .vscode/
 .idea/
+
+# Evaluation reports
+backend/eval/results/

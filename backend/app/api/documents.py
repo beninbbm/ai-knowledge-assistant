@@ -13,9 +13,10 @@ from sqlalchemy.exc import IntegrityError
 from app.auth.users import CurrentUser
 from app.config import settings
 from app.db import SessionDep
-from app.ingestion.extractors import detect_file_type
+from app.ingestion.extractors import FileType, detect_file_type, uncompressed_size
 from app.models import Document, DocumentChunk, DocumentPermission, DocumentStatus, Group, User
 from app.permissions import can_read_document, get_owned_document, get_readable_document
+from app.ratelimit import uploads
 from app.schemas import ChunkRead, DocumentRead, DocumentShares
 from app.storage import FileStorage, get_storage
 
@@ -30,7 +31,7 @@ def to_read(document: Document, user: User) -> DocumentRead:
     return result
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, dependencies=[Depends(uploads.dependency())])
 async def upload_document(
     user: CurrentUser,
     session: SessionDep,
@@ -52,6 +53,15 @@ async def upload_document(
         raise HTTPException(
             status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
             detail="Unsupported file. Upload a PDF (.pdf), Word (.docx) or Markdown (.md) file.",
+        )
+
+    if (
+        file_type == FileType.DOCX
+        and uncompressed_size(data) > settings.max_docx_uncompressed_bytes
+    ):
+        raise HTTPException(
+            status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="This Word file expands to an unusually large size and was rejected.",
         )
 
     sha256 = hashlib.sha256(data).hexdigest()

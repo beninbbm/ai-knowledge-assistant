@@ -23,8 +23,10 @@ from app.models import (
     MessageRole,
     User,
 )
+from app.observability import AnswerTimer, log_answer
 from app.permissions import can_read_document
 from app.rag import Answer, DoneEvent, generate, retrieve
+from app.ratelimit import questions
 from app.retrieval.condense import condense_question
 from app.schemas import (
     AnswerRead,
@@ -218,7 +220,11 @@ async def _save_turn(
     return user_message, assistant_message
 
 
-@router.post("/{conversation_id}/messages", response_class=EventSourceResponse)
+@router.post(
+    "/{conversation_id}/messages",
+    response_class=EventSourceResponse,
+    dependencies=[Depends(questions.dependency())],
+)
 async def send_message(
     conversation: OwnedConversation,
     body: AskRequest,
@@ -241,7 +247,9 @@ async def send_message(
     try:
         # 1. Make the question searchable on its own ("what about contractors?" ->
         #    "How much parental leave do contractors get?").
+        timer = AnswerTimer()
         standalone = await condense_question(chat, history, question)
+        timer.mark("rewrite_ms")
         rewritten = standalone if standalone.lower() != question.lower() else None
         if rewritten:
             yield ServerSentEvent(event="rewritten", data={"question": rewritten})
@@ -250,7 +258,9 @@ async def send_message(
         sources = await retrieve(
             session, embedder, user.id, question, body.k, history, search_query=rewritten
         )
-        async for event in generate(chat, question, sources, history, interpreted_as=rewritten):
+        timer.mark("retrieval_ms")
+        answering = generate(chat, question, sources, history, interpreted_as=rewritten)
+        async for event in timer.track(answering):
             if not isinstance(event, DoneEvent):
                 yield to_sse(event)
                 continue
@@ -258,6 +268,7 @@ async def send_message(
             user_message, assistant_message = await _save_turn(
                 session, conversation, len(earlier), question, standalone, event.answer
             )
+            log_answer(timer, event.answer, user.id, question, conversation.id, rewritten)
             data = AnswerRead.model_validate(event.answer).model_dump(mode="json")
             data |= {
                 "conversation_id": str(conversation.id),

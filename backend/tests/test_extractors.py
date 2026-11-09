@@ -56,8 +56,7 @@ def test_headings_are_not_body_text(extracted):
 
 def test_tables_keep_their_columns(extracted):
     table = next(s.text for s in extracted.sections if "London" in s.text)
-    assert "London | $250" in table
-    assert "Elsewhere | $180" in table
+    assert table == "City: London; Cap: $250\nCity: Elsewhere; Cap: $180"
 
 
 def test_list_items_stay_on_separate_lines(extracted):
