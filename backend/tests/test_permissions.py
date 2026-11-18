@@ -179,3 +179,37 @@ async def test_duplicate_group_name_conflicts(client, admin):
     await client.post("/groups", json={"name": "HR"}, headers=admin.headers)
     resp = await client.post("/groups", json={"name": "HR"}, headers=admin.headers)
     assert resp.status_code == 409
+
+
+async def test_emails_with_capitals_can_be_shared_with_and_grouped(
+    client, alice, admin, make_user, make_document
+):
+    # fastapi-users keeps the email as typed at sign-up; matching must ignore case.
+    dana = await make_user("Dana.Smith@example.com")
+    doc_id = await make_document(alice)
+    perms_url = f"/documents/{doc_id}/permissions"
+    resp = await client.put(
+        perms_url, json={"user_emails": ["dana.smith@example.com"]}, headers=alice.headers
+    )
+    assert resp.status_code == 200, resp.text
+    assert ids(await client.get("/documents", headers=dana.headers)) == {str(doc_id)}
+
+    group = (await client.post("/groups", json={"name": "Sales"}, headers=admin.headers)).json()
+    resp = await client.post(
+        f"/groups/{group['id']}/members",
+        json={"email": "DANA.SMITH@example.com"},
+        headers=admin.headers,
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["id"] == str(dana.id)
+
+
+@pytest.mark.parametrize("name", ["", "   ", "x" * 101])
+async def test_group_names_must_fit(client, admin, name):
+    resp = await client.post("/groups", json={"name": name}, headers=admin.headers)
+    assert resp.status_code == 422
+
+
+async def test_group_name_is_trimmed(client, admin):
+    resp = await client.post("/groups", json={"name": "  HR  "}, headers=admin.headers)
+    assert resp.status_code == 201 and resp.json()["name"] == "HR"

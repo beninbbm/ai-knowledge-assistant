@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { Document, DocumentShares, Group } from '../api/types'
 import Modal from './Modal'
@@ -16,11 +16,24 @@ export default function ShareDialog({ document, onClose }: { document: Document;
       </Modal>
     )
   }
+  // Never show an empty form when loading failed: saving it would remove every existing share.
+  if (shares.isError || groups.isError) {
+    return (
+      <Modal title={`Share “${document.title}”`} onClose={onClose}>
+        <p className="error-text">Couldn't load the current sharing: {(shares.error ?? groups.error)?.message}</p>
+        <div className="modal-actions">
+          <button className="btn" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </Modal>
+    )
+  }
   return (
     <ShareForm
       document={document}
-      initial={shares.data ?? { user_emails: [], group_ids: [] }}
-      groups={groups.data ?? []}
+      initial={shares.data}
+      groups={groups.data}
       onClose={onClose}
     />
   )
@@ -39,10 +52,15 @@ function ShareForm({
 }) {
   const [emails, setEmails] = useState(initial.user_emails.join('\n'))
   const [groupIds, setGroupIds] = useState<string[]>(initial.group_ids)
+  const queryClient = useQueryClient()
   const save = useMutation({
     mutationFn: (body: DocumentShares) =>
       api<DocumentShares>(`/documents/${document.id}/permissions`, { method: 'PUT', json: body }),
-    onSuccess: onClose,
+    onSuccess: (saved) => {
+      // Remember what was saved, so reopening the dialog starts from it (not the old list).
+      queryClient.setQueryData(['shares', document.id], saved)
+      onClose()
+    },
   })
 
   function submit() {

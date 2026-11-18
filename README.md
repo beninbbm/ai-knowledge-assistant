@@ -12,7 +12,7 @@ brew install uv ollama
 brew services start ollama
 ollama pull llama3.1:8b
 ollama pull nomic-embed-text
-cp .env.example .env            # then set JWT_SECRET
+cp .env.example .env            # then set JWT_SECRET (the API refuses to start without it)
 ```
 
 ## Run

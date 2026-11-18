@@ -1,5 +1,6 @@
 """Conversations: multi-turn chat where follow-up questions build on earlier ones."""
 
+import logging
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -7,10 +8,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.sse import EventSourceResponse, ServerSentEvent
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.ask import to_sse
+from app.api.ask import GENERIC_ERROR, to_sse
 from app.auth.users import CurrentUser
 from app.db import SessionDep
 from app.llm.chat import ChatError, ChatModel, get_chat_model
@@ -38,6 +39,8 @@ from app.schemas import (
     MessageRead,
     StoredCitationRead,
 )
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
 
@@ -173,11 +176,21 @@ async def delete_conversation(
 async def _save_turn(
     session: AsyncSession,
     conversation: Conversation,
-    position: int,
     question: str,
     standalone: str,
     answer: Answer,
 ) -> tuple[Message, Message]:
+    # Lock the conversation, then number the new messages after whatever is saved now.
+    # Answers take a while, so another tab may have saved a turn since this one started;
+    # the lock makes two saves to the same conversation take turns instead of colliding.
+    await session.execute(
+        select(Conversation.id).where(Conversation.id == conversation.id).with_for_update()
+    )
+    position = await session.scalar(
+        select(func.coalesce(func.max(Message.position) + 1, 0)).where(
+            Message.conversation_id == conversation.id
+        )
+    )
     user_message = Message(
         conversation_id=conversation.id,
         position=position,
@@ -266,7 +279,7 @@ async def send_message(
                 continue
             # 5. Save the turn, then report the final answer.
             user_message, assistant_message = await _save_turn(
-                session, conversation, len(earlier), question, standalone, event.answer
+                session, conversation, question, standalone, event.answer
             )
             log_answer(timer, event.answer, user.id, question, conversation.id, rewritten)
             data = AnswerRead.model_validate(event.answer).model_dump(mode="json")
@@ -279,3 +292,7 @@ async def send_message(
             yield ServerSentEvent(event="done", data=data)
     except (EmbeddingError, ChatError) as exc:
         yield ServerSentEvent(event="error", data={"message": str(exc)})
+    except Exception:
+        # Always end the stream with an event the browser understands.
+        log.exception("Error answering in conversation %s", conversation.id)
+        yield ServerSentEvent(event="error", data={"message": GENERIC_ERROR})

@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from fastapi.responses import FileResponse
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.users import CurrentUser
@@ -204,7 +204,8 @@ async def set_permissions(
     await get_owned_document(session, user, document_id)
 
     emails = {e.lower() for e in shares.user_emails} - {user.email.lower()}  # owner is implicit
-    users = (await session.scalars(select(User).where(User.email.in_(emails)))).all()
+    # Emails are stored as typed at sign-up, so compare case-insensitively.
+    users = (await session.scalars(select(User).where(func.lower(User.email).in_(emails)))).all()
     unknown_emails = emails - {u.email.lower() for u in users}
 
     group_ids = set(shares.group_ids)

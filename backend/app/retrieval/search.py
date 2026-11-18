@@ -120,6 +120,8 @@ async def search(
 
     results = []
     for chunk_id, score in fused:
+        if chunk_id not in by_id:  # its document was deleted a moment ago
+            continue
         chunk, title = by_id[chunk_id]
         distance = distances.get(chunk_id)
         results.append(

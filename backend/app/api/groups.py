@@ -4,7 +4,7 @@ Any signed-in user can list groups (to pick one when sharing); only admins manag
 import uuid
 
 from fastapi import APIRouter, HTTPException, Response, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.users import CurrentSuperuser, CurrentUser
@@ -34,7 +34,7 @@ async def list_groups(user: CurrentUser, session: SessionDep) -> list[GroupRead]
 async def create_group(
     body: GroupCreate, admin: CurrentSuperuser, session: SessionDep
 ) -> GroupRead:
-    group = Group(name=body.name.strip())
+    group = Group(name=body.name)
     session.add(group)
     try:
         await session.commit()
@@ -64,7 +64,7 @@ async def add_member(
     group_id: uuid.UUID, body: GroupMemberAdd, admin: CurrentSuperuser, session: SessionDep
 ) -> MemberRead:
     await _get_group(session, group_id)
-    member = await session.scalar(select(User).where(User.email == body.email.lower()))
+    member = await session.scalar(select(User).where(func.lower(User.email) == body.email.lower()))
     if member is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     if await session.get(GroupMember, (group_id, member.id)) is None:

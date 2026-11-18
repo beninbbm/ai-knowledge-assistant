@@ -2,9 +2,10 @@
 
 import uuid
 from datetime import datetime
+from typing import Annotated
 
 from fastapi_users import schemas
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, StringConstraints
 
 from app.config import settings
 from app.models import DocumentStatus
@@ -159,7 +160,8 @@ class DocumentShares(BaseModel):
 
 
 class GroupCreate(BaseModel):
-    name: str
+    # Surrounding spaces are removed before checking; the column holds 100 characters.
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
 
 class GroupRead(ORMModel):

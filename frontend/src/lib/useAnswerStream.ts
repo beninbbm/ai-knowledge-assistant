@@ -43,6 +43,7 @@ export function useAnswerStream(onFinished: (conversationId: string) => Promise<
           body: JSON.stringify({ question }),
           signal: abort.signal,
         })
+        let finished = false // set once 'done' or 'error' arrives
         for await (const { event, data } of readSse(resp)) {
           if (event === 'rewritten') {
             update({ phase: 'searching', rewritten: (data as { question: string }).question })
@@ -53,12 +54,18 @@ export function useAnswerStream(onFinished: (conversationId: string) => Promise<
             const piece = (data as { text: string }).text
             setTurn((t) => (t ? { ...t, phase: 'writing', text: t.text + piece } : t))
           } else if (event === 'done') {
+            finished = true
             update({ phase: 'done', done: data as AnswerDone })
             await onFinished(conversationId) // reload the saved conversation...
             setTurn(null) // ...which now contains this turn
           } else if (event === 'error') {
+            finished = true
             update({ phase: 'error', error: (data as { message: string }).message })
           }
+        }
+        // The connection closed early (server error or restart): don't spin forever.
+        if (!finished && !abort.signal.aborted) {
+          update({ phase: 'error', error: 'The answer was interrupted. Please try again.' })
         }
       } catch (err) {
         if (abort.signal.aborted) return

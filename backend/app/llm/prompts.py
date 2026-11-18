@@ -42,16 +42,26 @@ class NumberedSource:
     result: SearchResult
 
 
+_SOURCE_TAG = re.compile(r"<(\s*/?\s*source)", re.IGNORECASE)
+
+
 def _escape(text: str) -> str:
-    """Stop a document from closing our <source> tag and posing as instructions."""
-    return text.replace("</source", "&lt;/source").replace("<source", "&lt;source")
+    """Stop a document from closing our <source> tag and posing as instructions.
+    Matches any casing and spacing (</SOURCE>, < /Source>)."""
+    return _SOURCE_TAG.sub(r"&lt;\1", text)
+
+
+def _escape_attr(text: str) -> str:
+    """For text inside an attribute: a quote would end the attribute, and < could start a
+    tag. (">" is harmless inside quotes and keeps "Policy > Hotels" readable.)"""
+    return text.replace("&", "&amp;").replace('"', "&quot;").replace("<", "&lt;")
 
 
 def format_source(source: NumberedSource) -> str:
     r = source.result
-    attrs = [f'id="{source.number}"', f'document="{_escape(r.document_title)}"']
+    attrs = [f'id="{source.number}"', f'document="{_escape_attr(r.document_title)}"']
     if r.heading_path:
-        attrs.append(f'section="{_escape(" > ".join(r.heading_path))}"')
+        attrs.append(f'section="{_escape_attr(" > ".join(r.heading_path))}"')
     if r.page_start:
         pages = str(r.page_start) if r.page_start == r.page_end else f"{r.page_start}-{r.page_end}"
         attrs.append(f'page="{pages}"')

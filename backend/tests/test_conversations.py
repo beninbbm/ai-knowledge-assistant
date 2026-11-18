@@ -263,3 +263,27 @@ async def test_real_follow_up_conversation(client, alice, tmp_path, session_fact
     assert "contractor" in rewritten and "parental" in rewritten
     answer = follow_up["done"]["answer"].lower()
     assert "not eligible" in answer or "unpaid" in answer
+
+
+async def test_two_messages_at_once_get_separate_positions(client, alice, library):
+    # E.g. the same conversation open in two tabs: both turns are saved, in order.
+    import asyncio
+
+    conversation_id = await new_conversation(client, alice)
+    first, second = await asyncio.gather(
+        send(client, alice, conversation_id, "How much parental leave?"),
+        send(client, alice, conversation_id, "How much annual leave?"),
+    )
+    assert "done" in first and "done" in second
+    detail = (await client.get(f"/conversations/{conversation_id}", headers=alice.headers)).json()
+    assert [m["position"] for m in detail["messages"]] == [0, 1, 2, 3]
+    assert [m["role"] for m in detail["messages"]] == ["user", "assistant"] * 2
+
+
+async def test_unexpected_errors_still_end_with_an_error_event(client, alice, library, chat):
+    from app.api.ask import GENERIC_ERROR
+
+    conversation_id = await new_conversation(client, alice)
+    chat.error = RuntimeError("something unexpected")
+    events = await send(client, alice, conversation_id, "How much parental leave?")
+    assert events["error"] == {"message": GENERIC_ERROR} and "done" not in events

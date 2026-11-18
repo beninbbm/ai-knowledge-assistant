@@ -85,3 +85,26 @@ test('upload, ask, check citations, follow up, and stay private', async ({ page,
   await bob.screenshot({ path: `${SHOTS}/7-other-user-isolated.png` })
   await bobContext.close()
 })
+
+test('reopening Share after saving shows what was saved', async ({ page, browser }) => {
+  // Regression: the dialog used to reopen with the list from before the save, so the
+  // next save silently removed the person just added.
+  const bob = `e2e-share-bob-${stamp}@example.com`
+  const bobPage = await browser.newPage()
+  await register(bobPage, bob)
+  await bobPage.close()
+
+  await register(page, `e2e-share-owner-${stamp}@example.com`)
+  await page.getByRole('link', { name: 'Documents' }).click()
+  await page.locator('input[type=file]').setInputFiles(path.join(SAMPLES, 'employee-handbook.md'))
+  const row = page.locator('.doc-row', { hasText: 'employee-handbook' })
+  await expect(row).toBeVisible()
+
+  await row.getByRole('button', { name: 'Share' }).click()
+  await page.getByLabel('People (one email per line)').fill(bob)
+  await page.getByRole('button', { name: 'Save sharing' }).click()
+  await expect(page.getByRole('dialog')).toBeHidden()
+
+  await row.getByRole('button', { name: 'Share' }).click()
+  await expect(page.getByLabel('People (one email per line)')).toHaveValue(bob)
+})

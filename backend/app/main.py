@@ -19,13 +19,17 @@ from app.schemas import UserCreate, UserRead, UserUpdate
 
 log = logging.getLogger("app")
 
+INSECURE_JWT_SECRETS = {"", "change-me"}
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
-    if settings.jwt_secret in ("", "change-me"):
-        log.warning(
-            "JWT_SECRET is not set: login tokens use a default, guessable key. Set it in .env."
+    if settings.jwt_secret in INSECURE_JWT_SECRETS:
+        # Anyone who knows the default could sign their own login token for any user.
+        raise RuntimeError(
+            "JWT_SECRET is not set. Put a long random value in .env, for example the output "
+            "of: python -c 'import secrets; print(secrets.token_urlsafe(48))'"
         )
     yield
 

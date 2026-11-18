@@ -1,5 +1,6 @@
 """Ask a question and get an answer grounded in your documents, with citations."""
 
+import logging
 from collections.abc import AsyncIterator
 from typing import Annotated
 
@@ -16,6 +17,10 @@ from app.ratelimit import questions
 from app.schemas import AnswerRead, AskRequest, CitationRead
 
 router = APIRouter(prefix="/ask", tags=["ask"])
+log = logging.getLogger(__name__)
+
+# Shown when something unexpected fails mid-answer (details go to the server log).
+GENERIC_ERROR = "Something went wrong while answering. Please try again."
 
 EmbedderDep = Annotated[Embedder, Depends(get_embedder)]
 ChatDep = Annotated[ChatModel, Depends(get_chat_model)]
@@ -64,6 +69,10 @@ async def ask_stream(
             yield to_sse(event)
     except (EmbeddingError, ChatError) as exc:
         yield ServerSentEvent(event="error", data={"message": str(exc)})
+    except Exception:
+        # Always end the stream with an event the browser understands.
+        log.exception("Error answering a question")
+        yield ServerSentEvent(event="error", data={"message": GENERIC_ERROR})
 
 
 def to_sse(event: SourcesEvent | TokenEvent | DoneEvent) -> ServerSentEvent:

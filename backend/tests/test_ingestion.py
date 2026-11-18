@@ -165,3 +165,50 @@ async def test_two_workers_never_claim_the_same_document(client, alice, session_
     claimed = await asyncio.gather(*(claim() for _ in range(6)))
     real = [c for c in claimed if c is not None]
     assert len(real) == 4 and len(set(real)) == 4
+
+
+async def test_failure_while_saving_chunks_marks_document_failed(
+    client, alice, session_factory, storage
+):
+    # Anything going wrong in the final database step must not leave it "processing"
+    # (or stop the worker).
+    from tests.fakes import FakeEmbedder
+
+    class OneVectorShort(FakeEmbedder):
+        async def embed_documents(self, texts):
+            return (await super().embed_documents(texts))[:-1]
+
+    doc_id = (await upload(client, alice, "notes.md", b"# Notes\n\nSome text.\n")).json()["id"]
+    assert await run_worker(session_factory, storage, OneVectorShort()) == 1
+    doc = (await client.get(f"/documents/{doc_id}", headers=alice.headers)).json()
+    assert doc["status"] == "failed" and doc["error"].startswith("Unexpected error")
+
+
+async def test_heartbeat_stops_live_documents_being_requeued(
+    client, alice, session_factory, monkeypatch
+):
+    from datetime import timedelta
+
+    from sqlalchemy import func, update
+
+    import app.ingestion.pipeline as pipeline
+    from app.models import Document
+
+    await upload(client, alice, "notes.md", b"# Notes\n\nSome text.\n")
+    async with session_factory() as session:
+        doc_id = await claim_next_document(session)
+        # Pretend the claim happened an hour ago.
+        await session.execute(
+            update(Document)
+            .where(Document.id == doc_id)
+            .values(updated_at=func.now() - timedelta(hours=1))
+        )
+        await session.commit()
+
+    monkeypatch.setattr(pipeline, "HEARTBEAT_SECONDS", 0.05)
+    beat = asyncio.create_task(pipeline._heartbeat(session_factory, doc_id))
+    await asyncio.sleep(0.3)
+    beat.cancel()
+
+    async with session_factory() as session:
+        assert await pipeline.requeue_stale_documents(session, timedelta(minutes=10)) == 0

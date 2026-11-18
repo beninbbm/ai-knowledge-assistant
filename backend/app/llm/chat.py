@@ -93,7 +93,10 @@ class OllamaChat:
                 async for line in resp.aiter_lines():
                     if not line.strip():
                         continue
-                    data = json.loads(line)
+                    try:
+                        data = json.loads(line)
+                    except ValueError as exc:
+                        raise ChatError(f"Unexpected reply from Ollama: {line[:200]!r}") from exc
                     if "error" in data:
                         raise ChatError(f"Ollama error: {data['error']}")
                     text = data.get("message", {}).get("content", "")
