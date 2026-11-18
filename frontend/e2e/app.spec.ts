@@ -108,3 +108,41 @@ test('reopening Share after saving shows what was saved', async ({ page, browser
   await row.getByRole('button', { name: 'Share' }).click()
   await expect(page.getByLabel('People (one email per line)')).toHaveValue(bob)
 })
+
+test('Open PDF opens the file, and reports a failed download without a blank tab', async ({ page }) => {
+  await register(page, `e2e-pdf-${stamp}@example.com`)
+  await page.getByRole('link', { name: 'Documents' }).click()
+  await page.locator('input[type=file]').setInputFiles(path.join(SAMPLES, 'travel-expense-policy.pdf'))
+  await expect(page.locator('.badge-ready')).toHaveCount(1)
+
+  await page.getByRole('link', { name: 'Chat' }).click()
+  await page.getByLabel('Your question').fill('What is the hotel limit in London?')
+  await page.getByRole('button', { name: 'Send' }).click()
+  const answer = page.locator('.assistant-message').first()
+  await expect(answer.locator('.sources')).toBeVisible()
+  await answer.locator('.answer-text button.cite-chip').first().click()
+  const panel = page.getByRole('complementary', { name: 'Source passage' })
+  const openPdf = panel.getByRole('button', { name: /Open PDF/ })
+
+  // Works: the file downloads into the new tab. (Headless Chromium has no PDF viewer, so
+  // the tab's address can't be checked; check the download and that nothing went wrong.)
+  const [tab, file] = await Promise.all([
+    page.waitForEvent('popup'),
+    page.waitForResponse('**/api/documents/*/file'),
+    openPdf.click(),
+  ])
+  expect(file.status()).toBe(200)
+  expect(file.headers()['content-type']).toBe('application/pdf')
+  await page.waitForTimeout(500)
+  expect(tab.isClosed()).toBe(false)
+  await expect(panel.locator('.error-text')).toHaveCount(0)
+  await tab.close()
+
+  // Fails: the empty tab is closed again and the panel explains why.
+  await page.route('**/api/documents/*/file', (route) =>
+    route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"File is missing from storage"}' }),
+  )
+  const [failedTab] = await Promise.all([page.waitForEvent('popup'), openPdf.click()])
+  await expect(panel.locator('.error-text')).toContainText("Couldn't open the PDF")
+  await expect.poll(() => failedTab.isClosed()).toBe(true)
+})

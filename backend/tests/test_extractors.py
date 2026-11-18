@@ -109,6 +109,20 @@ def test_markdown_front_matter_and_code_blocks(tmp_path):
     assert all(s.heading_path == ("Setup",) for s in sections)
 
 
+@pytest.mark.parametrize("newline", ["\n", "\r\n"])
+def test_markdown_unusual_line_breaks_keep_text_under_the_right_heading(tmp_path, newline):
+    # Form feeds and U+2028 are not line breaks to markdown-it; they must not shift
+    # the text of later blocks onto the wrong lines.
+    md = "# Intro\n\nPage one.\x0cStill page one.\u2028Same line.\n\n# Leave\n\n16 weeks.\n"
+    path = tmp_path / "odd.md"
+    path.write_bytes(md.replace("\n", newline).encode())
+    sections = extract(path, FileType.MARKDOWN.value).sections
+    assert [(s.heading_path, s.text) for s in sections] == [
+        (("Intro",), "Page one.\x0cStill page one.\u2028Same line."),
+        (("Leave",), "16 weeks."),
+    ]
+
+
 def test_empty_markdown_is_rejected(tmp_path):
     path = tmp_path / "empty.md"
     path.write_text("# Only a heading\n")

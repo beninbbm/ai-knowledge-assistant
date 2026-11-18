@@ -40,11 +40,16 @@ def extract_markdown(path: Path) -> ExtractedDocument:
     except UnicodeDecodeError as exc:
         raise ExtractionError("Markdown file is not valid UTF-8 text.") from exc
 
+    # markdown-it numbers lines by "\n" only (after turning \r\n and \r into \n). Split
+    # the same way: str.splitlines() also breaks on form feeds, U+2028 and others, which
+    # would shift every block after them onto the wrong lines.
+    source = source.replace("\r\n", "\n").replace("\r", "\n")
+
     # Drop YAML front matter but keep line numbers aligned with the source.
     front = _FRONT_MATTER.match(source)
     if front:
         source = "\n" * front.group(0).count("\n") + source[front.end() :]
-    lines = source.splitlines()
+    lines = source.split("\n")
 
     sections: list[Section] = []
     headings: list[str] = []

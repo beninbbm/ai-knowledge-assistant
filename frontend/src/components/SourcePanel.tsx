@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, rawRequest } from '../api/client'
 import type { ChunkContext, Document, StoredCitation } from '../api/types'
@@ -18,15 +19,25 @@ export default function SourcePanel({ citation, onClose }: { citation: StoredCit
     retry: false,
   })
 
+  const [pdfError, setPdfError] = useState<string | null>(null)
+
   async function openPdf() {
     // The file needs our login token, so fetch it ourselves and open the downloaded copy.
     // Open the tab first (synchronously, so pop-up blockers allow it), then fill it.
+    setPdfError(null)
     const tab = window.open('', '_blank')
-    const resp = await rawRequest(`/documents/${citation.document_id}/file`)
-    const url = URL.createObjectURL(await resp.blob())
-    const target = citation.page_start ? `${url}#page=${citation.page_start}` : url
-    if (tab) tab.location.href = target
-    else window.location.href = target
+    try {
+      const resp = await rawRequest(`/documents/${citation.document_id}/file`)
+      const url = URL.createObjectURL(await resp.blob())
+      const target = citation.page_start ? `${url}#page=${citation.page_start}` : url
+      if (tab) tab.location.href = target
+      else window.location.href = target
+      // Free the downloaded copy once the tab has had time to load it.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (err) {
+      tab?.close() // don't leave an empty tab behind
+      setPdfError(`Couldn't open the PDF: ${err instanceof Error ? err.message : String(err)}`)
+    }
   }
 
   const isPdf = document.data?.mime_type === 'application/pdf'
@@ -74,6 +85,7 @@ export default function SourcePanel({ citation, onClose }: { citation: StoredCit
               Open PDF{citation.page_start ? ` at page ${citation.page_start}` : ''} ↗
             </button>
           )}
+          {pdfError && <p className="error-text">{pdfError}</p>}
         </div>
       )}
     </aside>
